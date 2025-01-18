@@ -264,9 +264,9 @@ func (d *Device) ExecCmd(cmd string) (string, error) {
 
 // OpenApp 打开应用
 func (d *Device) OpenApp(packageName string) error {
-	proc, err := d.client.GetDLL().FindProc("runApp")
+	proc, err := d.client.GetDLL().FindProc("openApp")
 	if err != nil {
-		return fmt.Errorf("查找runApp函数失败: %v", err)
+		return fmt.Errorf("查找openApp函数失败: %v", err)
 	}
 
 	pkgBytes := []byte(packageName + "\x00")
@@ -324,18 +324,24 @@ func (d *Device) SendText(text string) error {
 
 // ClearText 清除文本
 func (d *Device) ClearText(count int) error {
-	proc, err := d.client.GetDLL().FindProc("ClearText")
+	// 使用 sendText 发送退格键
+	proc, err := d.client.GetDLL().FindProc("sendText")
 	if err != nil {
-		return fmt.Errorf("查找ClearText函数失败: %v", err)
+		return fmt.Errorf("查找sendText函数失败: %v", err)
 	}
 
-	ret, _, err := proc.Call(
-		uintptr(d.client.GetHandle()),
-		uintptr(count),
-	)
+	// 发送count个退格键
+	backspace := "\b"
+	for i := 0; i < count; i++ {
+		textBytes := []byte(backspace + "\x00")
+		ret, _, _ := proc.Call(
+			uintptr(d.client.GetHandle()),
+			uintptr(unsafe.Pointer(&textBytes[0])),
+		)
 
-	if ret == 0 {
-		return errors.New("清除文本失败")
+		if ret == 0 {
+			return errors.New("清除文本失败")
+		}
 	}
 
 	return nil
