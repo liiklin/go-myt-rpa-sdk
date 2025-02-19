@@ -325,18 +325,16 @@ func (d *Device) SendText(text string) error {
 // ClearText 清除文本
 func (d *Device) ClearText(count int) error {
 	// 使用 sendText 发送退格键
-	proc, err := d.client.GetDLL().FindProc("sendText")
+	proc, err := d.client.GetDLL().FindProc("keyPress")
 	if err != nil {
-		return fmt.Errorf("查找sendText函数失败: %v", err)
+		return fmt.Errorf("查找keyPress函数失败: %v", err)
 	}
 
 	// 发送count个退格键
-	backspace := "\b"
 	for i := 0; i < count; i++ {
-		textBytes := []byte(backspace + "\x00")
 		ret, _, _ := proc.Call(
 			uintptr(d.client.GetHandle()),
-			uintptr(unsafe.Pointer(&textBytes[0])),
+			uintptr(67),
 		)
 
 		if ret == 0 {
@@ -344,5 +342,108 @@ func (d *Device) ClearText(count int) error {
 		}
 	}
 
+	return nil
+}
+
+// DumpNodeXml 导出节点XML信息
+func (d *Device) DumpNodeXml(dumpAll bool) (string, error) {
+	proc, err := d.client.GetDLL().FindProc("dumpNodeXml")
+	if err != nil {
+		return "", fmt.Errorf("查找dumpNodeXml函数失败: %v", err)
+	}
+
+	var mode uintptr
+	if dumpAll {
+		mode = 1
+	}
+
+	ret, _, _ := proc.Call(d.client.GetHandle(), mode)
+	if ret == 0 {
+		return "", fmt.Errorf("导出节点XML失败")
+	}
+
+	// 转换返回的字符串
+	ptr := (*byte)(unsafe.Pointer(ret))
+	n := 0
+	for *(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(ptr)) + uintptr(n))) != 0 {
+		n++
+	}
+	bytes := make([]byte, n)
+	copy(bytes, unsafe.Slice(ptr, n))
+
+	// 释放内存
+	if freeProc, err := d.client.GetDLL().FindProc("freeRpcPtr"); err == nil {
+		freeProc.Call(ret)
+	}
+
+	return string(bytes), nil
+}
+
+// DumpNodeXmlEx 导出节点XML信息（带工作模式和超时参数）
+func (d *Device) DumpNodeXmlEx(workMode bool, timeout int) (string, error) {
+	proc, err := d.client.GetDLL().FindProc("dumpNodeXmlEx")
+	if err != nil {
+		return "", fmt.Errorf("查找dumpNodeXmlEx函数失败: %v", err)
+	}
+
+	var mode uintptr
+	if workMode {
+		mode = 1
+	}
+
+	ret, _, _ := proc.Call(d.client.GetHandle(), mode, uintptr(timeout))
+	if ret == 0 {
+		return "", fmt.Errorf("导出节点XML失败")
+	}
+
+	// 转换返回的字符串
+	ptr := (*byte)(unsafe.Pointer(ret))
+	n := 0
+	for *(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(ptr)) + uintptr(n))) != 0 {
+		n++
+	}
+	bytes := make([]byte, n)
+	copy(bytes, unsafe.Slice(ptr, n))
+
+	// 释放内存
+	if freeProc, err := d.client.GetDLL().FindProc("freeRpcPtr"); err == nil {
+		freeProc.Call(ret)
+	}
+
+	return string(bytes), nil
+}
+
+func (d *Device) TouchDown(x, y int, fingerID int) error {
+	proc, err := d.client.GetDLL().FindProc("touchDown")
+	if err != nil {
+		return fmt.Errorf("查找touchDown函数失败: %v", err)
+	}
+	ret, _, _ := proc.Call(
+		uintptr(d.client.GetHandle()),
+		uintptr(fingerID),
+		uintptr(x),
+		uintptr(y),
+	)
+	if ret == 0 {
+		return errors.New("触摸按下失败")
+	}
+	return nil
+}
+
+func (d *Device) TouchUp(x, y int, fingerID int) error {
+	proc, err := d.client.GetDLL().FindProc("touchUp")
+	if err != nil {
+		return fmt.Errorf("查找touchUp函数失败: %v", err)
+	}
+
+	ret, _, _ := proc.Call(
+		uintptr(d.client.GetHandle()),
+		uintptr(fingerID),
+		uintptr(x),
+		uintptr(y),
+	)
+	if ret == 0 {
+		return errors.New("触摸抬起失败")
+	}
 	return nil
 }
